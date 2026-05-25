@@ -1,0 +1,88 @@
+services:
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    container_name: otel_collector
+    restart: unless-stopped
+    command:
+      - "--config=/etc/otelcol-contrib/config.yaml"
+    depends_on:
+      - loki
+      - tempo
+      - mimir
+    volumes:
+      - ./monitoring/otel/collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      - internal_net
+
+  loki:
+    image: grafana/loki:3.7
+    container_name: loki
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/loki/config.yaml"
+    volumes:
+      - ./monitoring/loki/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - internal_net
+
+  tempo:
+    image: grafana/tempo:2.10.0
+    container_name: tempo
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/tempo/config.yaml"
+    volumes:
+      - ./monitoring/tempo/tempo-config.yaml:/etc/tempo/config.yaml:ro
+      - tempo_data:/var/tempo
+    networks:
+      - internal_net
+
+  mimir:
+    image: grafana/mimir:3.0.0
+    container_name: mimir
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/mimir/mimir.yaml"
+      - "-target=all"
+    volumes:
+      - ./monitoring/mimir/mimir-config.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir_data:/data
+    networks:
+      - internal_net
+
+  grafana:
+    image: grafana/grafana:13.0.1
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      - loki
+      - tempo
+      - mimir
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: ${GF_USERS_ALLOW_SIGN_UP:-"false"}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - internal_net
+
+networks:
+  internal_net:
+    name: internal_net
+
+volumes:
+  loki_data:
+    name: loki_data
+  tempo_data:
+    name: tempo_data
+  mimir_data:
+    name: mimir_data
+  grafana_data:
+    name: grafana_data
